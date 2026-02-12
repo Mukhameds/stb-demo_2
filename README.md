@@ -282,7 +282,5 @@ To demonstrate that:
 Causal, modular, signal-based decision systems
 are viable, inspectable, and extensible.
 
-This is an engineering foundation, not a paper experiment.
-
 ---
 
