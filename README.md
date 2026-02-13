@@ -1,53 +1,68 @@
 
 ---
 
-# STB Planning Core
+# STB Time + Planning Demo
 
-### A Causal, Signal-Based Decision Architecture (Non-Neural)
-
-This repository demonstrates a structural alternative to neural-network-based decision systems.
-
-It implements a **modular signal architecture** capable of:
-
-* uncertainty-aware decision making
-* explicit “wait to gather information” behavior
-* causal intervention (`do()`)
-* counterfactual reasoning
-* online adaptive learning
-* learned average causal effect (ACE) estimation
-
-This is not a neural network.
-This is not reinforcement learning as usually implemented.
-This is a transparent structural decision core.
+### Causal, Modular Decision Core (Non-Neural)
 
 ---
 
-# Strategic Context
+## Overview
 
-Modern AI systems are:
+This repository contains a minimal structural decision system implemented in Go.
 
-* opaque (LLMs, deep RL)
-* difficult to audit
-* hard to causally reason about
-* not structurally safe by design
+The system:
 
-This demo explores a different direction:
+* makes decisions under uncertainty,
+* can choose to delay action (WAIT),
+* learns when delaying improves outcomes,
+* supports structural causal interventions (`do()`),
+* allows deterministic replay for counterfactual comparison.
 
-A lightweight, modular, inspectable decision engine
-with built-in causal structure and intervention logic.
-
-The long-term vision:
-a deployable adaptive decision core for embedded agents, robotics, and persistent AI systems.
+This is a modular decision core.
+It is not a neural network.
 
 ---
 
-# Core Architectural Idea
+## Problem Addressed
 
-Decision is not a monolithic function.
+Reactive systems act immediately based on noisy observations.
 
-Decision is the result of competing **signal modules**.
+In many environments:
 
-Each action receives weighted contributions from:
+* observations are unreliable,
+* acting too early causes catastrophic loss,
+* waiting can improve decision quality.
+
+The core problem demonstrated here:
+
+> When should a system act immediately, and when should it wait to gather more reliable information?
+
+This demo implements that capability structurally.
+
+---
+
+## Environment Model
+
+The environment contains:
+
+* `TrueRisk` — hidden ground truth
+* `Obs1` — initial observation (noisy, reliability = Rel1)
+* `Obs2` — second observation (after WAIT, higher reliability = Rel2)
+
+Available actions:
+
+* BUY
+* RUN
+* WAIT
+
+WAIT enables access to Obs2 before committing to a final action.
+
+---
+
+## Decision Architecture
+
+Each action is evaluated by modular components:
 
 * Goal
 * Emotion
@@ -57,230 +72,151 @@ Each action receives weighted contributions from:
 * Will
 * SafetyPrior
 
-The system computes logits for actions and converts them to probabilities via softmax.
+Each module produces a logit contribution.
+
+Final decision probabilities are computed via softmax.
+
+There is no backpropagation, no hidden layers, no gradient descent.
 
 ---
 
-# Key Concept: WAIT as a Planning Operator
+## WAIT as Planning Operator
 
-Most reactive systems choose between actions immediately.
+WAIT is not a random action.
 
-This architecture introduces:
+It is activated when:
 
-WAIT — a structural planning action.
+1. Value of Information (VOI) is high
+2. Learned Average Causal Effect (ACE) of WAIT is positive
 
-WAIT means:
+The system learns when WAIT causally improves reward.
 
-> Do not commit yet.
-> Gather better information.
-> Then decide.
-
-This transforms the system from reactive → deliberative.
-
-WAIT is gated by:
-
-1. VOI (Value of Information heuristic)
-2. Learned ACE (Average Causal Effect)
-
-The system learns when WAIT actually improves outcomes.
+This converts a purely reactive system into a two-step planning system.
 
 ---
 
-# Terminology (System Vocabulary)
+## Learning
 
-### TrueRisk
+The system adapts:
 
-Hidden ground-truth state of environment.
+* Module gains evolve based on reward.
+* Memory stores avoid-only penalties for catastrophic actions.
+* CausalLearner estimates ACE for WAIT in specific contexts.
 
-### Obs1 / Obs2
+Learning is local and structural.
 
-Two-stage observation:
+---
 
-* Obs1: noisy first observation
-* Obs2: refined observation after WAIT
+## Structural Causal Model (SCM)
 
-### Rel1 / Rel2
-
-Reliability of observation stages.
-
-### Gains
-
-Adaptive weights for signal modules:
-
-* Goal
-* Emotion
-* Memory
-* Instinct
-* Logic
-* Will
-
-### Memory (avoid-only)
-
-Stores penalties for catastrophic BUY in risky regimes.
-Has:
-
-* cap
-* decay
-
-### SafetyPrior
-
-Non-learned structural prior to prevent absurd early behavior.
-
-### CausalLearner
-
-Learns:
-
-ACE ≈ E[Reward | do(A1 = WAIT)]
-− E[Reward | policy without Logic]
-
-Uses context backoff keys to avoid sparse regimes.
-
-### SCM (Structural Causal Model)
-
-The environment and policy are explicitly modeled as:
+The demo includes explicit SCM definitions:
 
 Exogenous variables:
 
 * TrueRisk
 * Emotion
-* Rel1, Rel2
-* Noise
+* Rel1
+* Rel2
+* Noise1
+* Noise2
 
-Endogenous:
+Endogenous variables:
 
 * Obs1
 * Obs2
-* A1
-* A2
+* A1 (first-stage action)
+* A2 (second-stage action)
 * Final
 * Reward
 
-Interventions are performed explicitly via `do()`.
+The system supports:
+
+* `do(Logic=0)`
+* `do(A1=BUY)`
+* `do(Rel1=0.95)`
+* counterfactual evaluation under fixed latent variables
+
+This allows causal analysis of the decision process.
 
 ---
 
-# What Makes This Different
-
-This system can:
-
-1. Disable Logic and show degradation.
-2. Intervene on A1 directly (`do(A1=BUY)`).
-3. Intervene on world reliability (`do(Rel1=0.95)`).
-4. Compare counterfactual outcomes under the same latent U.
-
-This is causal reasoning, not pattern fitting.
-
----
-
-# Demonstrated Effects
+## Demonstrated Behaviors
 
 After training:
 
-* Catastrophe rate in TRUE_HIGH decreases significantly.
-* WAIT usage increases selectively in high-uncertainty regimes.
-* Logic gain increases adaptively.
-* Learned ACE becomes positive in boundary conditions.
-* Disabling Logic measurably breaks behavior.
+* Catastrophic BUY in high-risk regimes decreases.
+* WAIT is used primarily in high-uncertainty contexts.
+* Logic gain increases when planning is beneficial.
+* Disabling Logic degrades performance.
+* WAIT shows positive learned ACE in boundary conditions.
 
-Two canonical demonstrations:
+Two canonical cases are shown:
 
-### A) Catastrophe Avoidance
+### 1. Catastrophe Avoidance
 
-WAIT prevents BUY under misleading first observation.
+WAIT prevents committing to BUY under misleading observation.
 
-### B) Profit Rescue
+### 2. Profit Rescue
 
-WAIT prevents premature RUN near decision boundary.
+WAIT prevents premature RUN near risk boundary.
 
-Both are verified via structural counterfactual comparison.
-
----
-
-# Why This Matters for YC
-
-This is not about trading simulation.
-
-This is about proving:
-
-1. A non-neural decision architecture can be:
-
-   * modular
-   * inspectable
-   * causally analyzable
-
-2. Planning (WAIT) can be:
-
-   * learned structurally
-   * evaluated causally
-   * proven necessary via intervention
-
-3. Safety-critical behavior can emerge without deep networks.
-
-This architecture is:
-
-* CPU-only
-* lightweight
-* deterministic in evaluation
-* fully auditable
-* extensible
+Both are validated with structural counterfactual comparison.
 
 ---
 
-# Long-Term Direction
+## What This Demo Is
 
-This demo is the atomic core of a broader architecture concept:
-
-A persistent, modular AI core capable of:
-
-* long-term memory
-* adaptive planning
-* explicit intervention reasoning
-* embedded deployment
-* agent autonomy without black-box models
-
-This is a structural foundation for:
-
-* robotics decision layers
-* embedded autonomous agents
-* safety-aware planning systems
-* personal persistent AI cores
+* A minimal planning core
+* A modular decision architecture
+* A structural causal reasoning demonstration
+* A deterministic replay + intervention testbed
+* A non-neural alternative for safety-critical decision logic
 
 ---
 
-# What This Is Not
+## Technical Properties
 
-* Not AGI
-* Not a trading bot
-* Not a neural network competitor benchmark
-* Not a full RL framework
-
-It is a structural proof-of-concept of a causal planning core.
+* Deterministic replay mode
+* Explicit gain adaptation
+* Avoid-only memory mechanism
+* Softmax action selection
+* Two-stage observation model
+* Explicit causal graph
+* Intervention and counterfactual support
 
 ---
 
-# How to Run
+## How to Run
 
 ```
 go run main.go
 ```
 
-The program:
+Execution flow:
 
-1. Prints pre-training policy stats.
-2. Trains for 1400 episodes.
-3. Shows adaptive gain evolution.
-4. Displays memory and causal tables.
-5. Runs deterministic DO-CHECK.
-6. Executes full SCM + counterfactual demo.
-
----
-
-# Why This Repo Exists
-
-To demonstrate that:
-
-Causal, modular, signal-based decision systems
-are viable, inspectable, and extensible.
+1. Show greedy stats before training
+2. Train for 1400 episodes
+3. Show gain evolution
+4. Display memory + ACE tables
+5. Execute deterministic DO-CHECK
+6. Run full SCM + counterfactual analysis
 
 ---
 
+## Perspective
+
+This demo isolates and validates one capability:
+
+> A modular system can learn when delaying action causally improves outcome.
+
+The architecture can be extended toward:
+
+* multi-step planning
+* embedded control systems
+* robotics decision layers
+* interpretable AI cores
+* persistent agent systems
+
+It is intended as a minimal, inspectable foundation for larger decision architectures.
+
+---
